@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__computer",
+      "mcp__Claude_in_Chrome__find",
+      "Bash(ls \"C:\\\\Users\\\\j.hoell\\\\.claude\\\\skills\" 2>/dev/null || echo \"not found\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\j.hoell\\\\.claude\\\\skills\\\\hdm-timesheet\")",
+      "Bash(mkdir -p /c/temp/Claude/.claude/skills/hdm-timesheet)",
+      "Bash(cp \"C:/Users/j.hoell/.claude/skills/hdm-timesheet/SKILL.md\" /c/temp/Claude/.claude/skills/hdm-timesheet/SKILL.md)"
+    ]
+  }
+}

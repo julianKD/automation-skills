@@ -1,19 +1,82 @@
-# toggl-sync
+# automation-skills
 
-Toggl Track timesheet assistant powered by a Cursor/Claude skill and the
+A documentation library of AI agent skills used across Cursor and Claude Desktop.
+Each skill is version-controlled here and synced to its deployment location(s).
+
+## Skills
+
+### [toggl-timesheet](skills/toggl-timesheet/)
+
+Toggl Track timesheet assistant. Reads Outlook calendar screenshots or verbal
+descriptions, maps meetings to HdM projects, fills gaps, and creates
+15-minute-rounded entries via the
 [toggl-track-mcp](https://github.com/dovahkaal/TogglTrackMcp) MCP server.
 
-Paste Outlook calendar screenshots or describe your day verbally -- the skill
-maps meetings to projects, fills gaps, and creates 15-minute-rounded entries
-in your Toggl account.
+| File | Purpose |
+|------|---------|
+| `SKILL.md` | Conversation flow, project mappings, entry rules, Outlook parsing |
+| `reference.md` | Per-project description vocabulary (2023-2025 history) |
 
-## Prerequisites
+**Deployed to:** `~/.cursor/skills/toggl-timesheet/` (Cursor, all workspaces)
 
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/) package manager
-- A Toggl Track account
+**MCP dependency:** `toggl-track` (dovahkaal/TogglTrackMcp)
 
-## Setup
+---
+
+### [hdm-timesheet](skills/hdm-timesheet/)
+
+UI guide for the HdM PPM timesheet web app at `ppm.herzogdemeuron.com`.
+Covers table structure, attendance slots, adding projects, and logging hours.
+Used by Claude Desktop with browser automation (Claude in Chrome) to interact
+with the PPM app directly.
+
+| File | Purpose |
+|------|---------|
+| `SKILL.md` | Step-by-step guide for the PPM web app |
+
+**Deployed to:**
+- `~/.claude/skills/hdm-timesheet/` (Claude Code, user-level)
+- `C:\temp\Claude\.claude\skills\hdm-timesheet\` (Claude Code, workspace-level)
+
+**MCP dependency:** Claude in Chrome (browser automation)
+
+---
+
+## Configs
+
+### [claude-desktop](configs/claude-desktop/)
+
+Workspace configuration for the Claude Desktop / Claude Code workspace at
+`C:\temp\Claude`. Contains the `CLAUDE.md` workspace instructions and MCP
+permission grants for browser automation via Claude in Chrome.
+
+| File | Purpose |
+|------|---------|
+| `CLAUDE.md` | Workspace-level instructions and skill inventory |
+| `settings.local.json` | MCP permission allowlist for Claude in Chrome tools |
+
+---
+
+## Syncing changes
+
+After editing a skill in this repo, copy it to the live location:
+
+```powershell
+# Toggl skill → Cursor
+Copy-Item -Path skills\toggl-timesheet\* -Destination "$env:USERPROFILE\.cursor\skills\toggl-timesheet\" -Force
+
+# HdM skill → Claude Code (user-level)
+Copy-Item -Path skills\hdm-timesheet\* -Destination "$env:USERPROFILE\.claude\skills\hdm-timesheet\" -Force
+
+# HdM skill → Claude Code (workspace-level)
+Copy-Item -Path skills\hdm-timesheet\* -Destination "C:\temp\Claude\.claude\skills\hdm-timesheet\" -Force
+
+# Claude Desktop workspace config
+Copy-Item -Path configs\claude-desktop\CLAUDE.md -Destination "C:\temp\Claude\CLAUDE.md" -Force
+Copy-Item -Path configs\claude-desktop\settings.local.json -Destination "C:\temp\Claude\.claude\settings.local.json" -Force
+```
+
+## Setup (for Toggl MCP)
 
 ### 1. Get your Toggl API token
 
@@ -33,8 +96,9 @@ Also paste the same token into `.cursor/mcp.json` (replace `your-token-here`).
 
 ### 3. Cursor workspace MCP
 
-The MCP is already configured in `.cursor/mcp.json`. After updating the token,
-restart Cursor. The `toggl-track` MCP server should appear in the MCP panel.
+The MCP is configured in `.cursor/mcp.json` (gitignored). After updating the
+token, restart Cursor. The `toggl-track` MCP server should appear in the MCP
+panel.
 
 ### 4. Claude Desktop (optional)
 
@@ -54,35 +118,3 @@ Add this to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or
   }
 }
 ```
-
-If you already have other MCP servers configured, merge the `toggl-track`
-entry into your existing `mcpServers` object.
-
-Restart Claude Desktop after saving.
-
-## Skill
-
-The live skill is installed at `~/.cursor/skills/toggl-timesheet/` (personal,
-available across all Cursor workspaces). A version-controlled copy lives in
-this repo under `skill/`:
-
-- `skill/SKILL.md` -- conversation flow, project patterns, entry rules
-- `skill/reference.md` -- per-project description vocabulary (3 years of history)
-
-To sync changes back to the live location after editing in the repo:
-
-```powershell
-Copy-Item -Path skill\* -Destination "$env:USERPROFILE\.cursor\skills\toggl-timesheet\" -Force
-```
-
-## Usage
-
-Start a new chat and mention timesheets, hours, or Toggl. The skill activates
-automatically. Three main workflows:
-
-1. **Screenshot**: Paste an Outlook calendar screenshot.
-2. **Verbal**: "I talked with Mo about BIM Standards for 30 min."
-3. **Day-fill**: "I left at 18:30 on Wednesday."
-
-The assistant proposes entries in a table, asks only what is missing, and
-creates them on confirmation.
