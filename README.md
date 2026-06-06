@@ -42,6 +42,21 @@ with the PPM app directly.
 
 ---
 
+### [toggl-to-hdm](skills/toggl-to-hdm/)
+
+Bridges Toggl Track and the HdM PPM timesheet. Pulls a week's Toggl entries,
+aggregates by project and day, then fills PPM via browser automation.
+
+| File | Purpose |
+|------|---------|
+| `SKILL.md` | Transfer flow, project mapping table, PPM fill steps |
+
+**Deployed to:** `~/.claude/skills/toggl-to-hdm/` (Claude Code, user-level)
+
+**MCP dependencies:** `toggl-track` (dovahkaal/TogglTrackMcp) + Claude in Chrome
+
+---
+
 ## Configs
 
 ### [claude-desktop](configs/claude-desktop/)
@@ -71,9 +86,15 @@ Copy-Item -Path skills\hdm-timesheet\* -Destination "$env:USERPROFILE\.claude\sk
 # HdM skill → Claude Code (workspace-level)
 Copy-Item -Path skills\hdm-timesheet\* -Destination "C:\temp\Claude\.claude\skills\hdm-timesheet\" -Force
 
-# Claude Desktop workspace config
+# Toggl-to-HdM skill → Claude Code (user-level)
+Copy-Item -Path skills\toggl-to-hdm\* -Destination "$env:USERPROFILE\.claude\skills\toggl-to-hdm\" -Force
+
+# Claude Code workspace config
 Copy-Item -Path configs\claude-desktop\CLAUDE.md -Destination "C:\temp\Claude\CLAUDE.md" -Force
 Copy-Item -Path configs\claude-desktop\settings.local.json -Destination "C:\temp\Claude\.claude\settings.local.json" -Force
+
+# Toggl MCP config — lives at repo root (already there, no copy needed)
+# configs\claude-code\.mcp.json is the source; .mcp.json at repo root is the live copy
 ```
 
 ## Setup (for Toggl MCP)
