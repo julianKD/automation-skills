@@ -10,333 +10,439 @@ description: >-
 # Toggl → HdM PPM Transfer
 
 Pull Toggl entries for a period, aggregate by project and day, compute
-attendance slots from entry gaps, then fill everything via JS batch injection.
+attendance slots from entry gaps, then fill everything via direct API calls.
 Be brief and action-oriented.
 
 ## MCP dependencies
 
 - `toggl-track` MCP — `list_time_entries`, `list_projects`
-- `Claude in Chrome` MCP — JS injection + UI for adding missing rows
+- `Claude in Chrome` MCP — XHR API calls + UI for adding missing project rows
 
 ---
 
-## PPM API (use this for all reads/deletes)
+## PPM API reference (complete)
 
-PPM exposes a REST API at `/ts_22_api/`:
+The app is Odoo with a custom REST/JSON-RPC hybrid. **It uses XHR internally,
+not fetch** — intercept with `XMLHttpRequest.prototype.send` not `window.fetch`.
+
+All write endpoints use this envelope:
+```json
+{"params": {"data": { ...fields... }}}
+```
+
+### Project hours
 
 | Action | Endpoint | Method |
 |---|---|---|
-| Fetch full timesheet data | `/ts_22_api/timesheets/{id}` | GET |
-| Delete a project hour entry | `/ts_22_api/timesheet_lines/{lineId}` | DELETE |
-| Delete an attendance entry | `/ts_22_api/attendance_lines/{lineId}` | DELETE |
+| Create line | `/ts_22_api/timesheet_lines` | POST |
+| Delete line | `/ts_22_api/timesheet_lines/{id}` | DELETE |
 
-The GET response contains `timesheet_days[]` — each day has:
-- `timesheet_lines[]` → `{id, float_amount, time_amount, ...}` (project hours)
-- `attendance_lines[]` → `{id, arrival_time, departure_time, ...}`
-
-Use these IDs to DELETE entries directly. **Sequential deletes with ~500ms
-delay** avoid `500 concurrent update` errors from the server.
-
-```js
-// Fetch all line IDs
-const data = await fetch('/ts_22_api/timesheets/{id}').then(r => r.json());
-
-// Clear all project hours sequentially
-for (const day of data.timesheet_days) {
-  for (const line of day.timesheet_lines) {
-    if (line.float_amount > 0) {
-      await fetch(`/ts_22_api/timesheet_lines/${line.id}`, {method: 'DELETE'});
-      await new Promise(r => setTimeout(r, 400));
-    }
-  }
-}
-
-// Clear all attendance lines sequentially
-for (const day of data.timesheet_days) {
-  for (const att of day.attendance_lines) {
-    if (att.arrival_time !== '00:00' || att.departure_time !== '00:00') {
-      await fetch(`/ts_22_api/attendance_lines/${att.id}`, {method: 'DELETE'});
-      await new Promise(r => setTimeout(r, 400));
+**Create body:**
+```json
+{
+  "params": {
+    "data": {
+      "date": "2026-05-05",
+      "task_id": 11557,
+      "is_public_holiday": false,
+      "is_sunday": false,
+      "float_amount": 3.75,
+      "timesheet_id": "51310"
     }
   }
 }
 ```
 
-**Note:** `javascript_tool` does not support top-level `await`. Wrap in an
-async IIFE or use `.then()` chains + `window._results` to collect output.
+- `timesheet_id` must be a **string** (`"51310"`, not `51310`)
+- `float_amount` = hours as decimal (3h45m = 3.75, 8h30m = 8.5)
+- `is_public_holiday: true` for Ascension, Labour Day, etc. — PPM accepts
+  entries on holidays but needs the flag set
+- Response: `{"jsonrpc":"2.0","id":null,"result":"ok"}`
+- Duplicate entry: server returns `"There are other timesheets for this date
+  for the given task!"` — safe to skip
+
+### Attendance
+
+| Action | Endpoint | Method |
+|---|---|---|
+| Create arrival | `/ts_22_api/attendance_lines` | POST |
+| Set departure | `/ts_22_api/attendance_lines/{id}` | PUT |
+| Delete slot | `/ts_22_api/attendance_lines/{id}` | DELETE |
+
+**Create arrival body:**
+```json
+{
+  "params": {
+    "data": {
+      "date": "2026-05-05",
+      "time": "8:30",
+      "timesheet_id": "51310",
+      "attendance_type": "arrival",
+      "entry_type": "by_hand"
+    }
+  }
+}
+```
+
+Each POST arrival **creates a new slot** — there is no slot limit. Slots for
+the same day are ordered by creation time (ascending ID).
+
+**Set departure body:**
+```json
+{
+  "params": {
+    "data": {
+      "date": "2026-05-05",
+      "time": "12:30",
+      "timesheet_id": "51310",
+      "attendance_type": "departure",
+      "id": 800159,
+      "entry_type": "by_hand"
+    }
+  }
+}
+```
+
+The `id` is the attendance_line record ID, obtained by GETting the timesheet
+after the POST arrival. You **cannot** POST departure standalone — departure
+requires an existing arrival record (PUT updates it).
+
+### Read
+
+| Action | Endpoint |
+|---|---|
+| Full timesheet | GET `/ts_22_api/timesheets/{id}` |
+| Task list | GET `/ts_22_api/timesheets/get_projects/{id}` |
+
+GET response structure:
+- `tasks[]` → `{id, name_for_timesheet, float_amount, ...}` — task_ids needed for POSTing
+- `timesheet_days[]` → per-day data:
+  - `timesheet_lines[]` → `{id, float_amount, time_amount, ...}`
+  - `attendance_lines[]` → `{id, arrival_time, departure_time, ...}`
+- `num_attendance_slots` — current slot count
+
+### XHR helper (use for all create/update)
+
+```js
+function xhrPost(url, data) {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(url.includes('/') && url.split('/').length > 4 ? 'PUT' : 'POST', url);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = () => resolve(JSON.parse(xhr.responseText));
+    xhr.send(JSON.stringify({params:{data}}));
+  });
+}
+// Simpler named helpers:
+function postLine(date, taskId, floatAmount, isPubHol, tsId) {
+  return new Promise(res => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/ts_22_api/timesheet_lines');
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = () => res(JSON.parse(xhr.responseText));
+    xhr.send(JSON.stringify({params:{data:{
+      date, task_id: taskId, is_public_holiday: isPubHol||false,
+      is_sunday: false, float_amount: floatAmount, timesheet_id: tsId
+    }}}));
+  });
+}
+function postArrival(date, time, tsId) {
+  return new Promise(res => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/ts_22_api/attendance_lines');
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = () => res(JSON.parse(xhr.responseText));
+    xhr.send(JSON.stringify({params:{data:{
+      date, time, timesheet_id: tsId, attendance_type: "arrival", entry_type: "by_hand"
+    }}}));
+  });
+}
+function putDeparture(id, date, time, tsId) {
+  return new Promise(res => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', `/ts_22_api/attendance_lines/${id}`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = () => res(JSON.parse(xhr.responseText));
+    xhr.send(JSON.stringify({params:{data:{
+      date, time, timesheet_id: tsId, attendance_type: "departure", id, entry_type: "by_hand"
+    }}}));
+  });
+}
+function getTs(tsId) { return fetch(`/ts_22_api/timesheets/${tsId}`).then(r=>r.json()); }
+function delay(ms) { return new Promise(res => setTimeout(res, ms)); }
+```
+
+**Use sequential calls with 300ms delay** to avoid `500 concurrent update` errors.
 
 ---
 
-## PPM cells (for writing/injection)
+## DOM cell IDs (for reference / update-only use)
 
 Every editable cell has a unique HTML ID:
-
 ```
 ts22-data-cell-{lineIndex}-{dayIndex}
 ```
+- `dayIndex` = day-of-month − 1 (May 5 → 4, May 31 → 30)
+- `lineIndex` = row number assigned by server at creation time
 
-- **lineIndex** — row number (attendance rows first, then project rows)
-- **dayIndex** — day-of-month minus 1 (May 1 → 0, May 5 → 4, May 31 → 30)
-
-Access any cell directly: `document.getElementById('ts22-data-cell-11-4')`
-
-**Never use DOM column indices or X-position** — they are offset-prone due to
-header/data row structural differences. Cell IDs are the only reliable method.
-
-**Setting values** works via DOM injection (textContent + events).
-**Clearing values** requires the DELETE API above — DOM clearing does not persist.
+**Important:** DOM injection (setting `textContent` + dispatching events) only
+**updates** existing server records — it does **not create** new ones. On a fresh
+or cleared timesheet, DOM injection silently fails. Always use the API above
+for creating entries. DOM injection is useful only for correcting values that
+already exist on the server.
 
 ---
 
 ## Step 1 — User provides the PPM URL
 
-Ask for the timesheet URL:
 ```
 https://ppm.herzogdemeuron.com/ts22/timesheets/timesheet/{id}
 ```
-Navigate there.
+Navigate there. Extract the timesheet ID (e.g. `51310`).
 
 ---
 
-## Step 2 — Discover existing rows via JS
-
-Run once after navigating:
+## Step 2 — Fetch timesheet state and task IDs
 
 ```js
-// Project rows
-const lineMap = {};
-document.querySelectorAll('tr').forEach(row => {
-  const label = row.querySelector('td:not([contenteditable])')?.textContent?.trim() || '';
-  if (!label || label.length < 3) return;
-  const firstCell = row.querySelector('td[id^="ts22-data-cell-"]');
-  if (!firstCell) return;
-  lineMap[label] = parseInt(firstCell.id.split('-')[3]);
+// Run in javascript_tool after navigating
+fetch('/ts_22_api/timesheets/51310').then(r=>r.json()).then(d => {
+  window._tasks = {};
+  (d.tasks||[]).forEach(t => { window._tasks[t.name_for_timesheet] = t.id; });
+  window._numSlots = d.num_attendance_slots;
+  window._tsData = d;
 });
-
-// Attendance rows (ts22-time-row class, no label)
-const attendanceLineIdxs = [];
-document.querySelectorAll('tr.ts22-time-row').forEach(row => {
-  const firstCell = row.querySelector('td[id^="ts22-data-cell-"]');
-  if (firstCell) attendanceLineIdxs.push(parseInt(firstCell.id.split('-')[3]));
-});
-// attendanceLineIdxs sorted ascending: [0,1,2,3...] → pairs: [0,1]=slot1, [2,3]=slot2
-// Within each pair: lower lineIdx = arrival row, higher = departure row
-
-JSON.stringify({lineMap, attendanceLineIdxs});
 ```
+
+This gives you the task_id for every PPM project row — needed for the POST payload.
 
 ---
 
 ## Step 3 — Fetch Toggl data
 
-- `list_projects` once to cache project IDs → names
-- `list_time_entries` for the full month of the timesheet
+- `list_projects` once to cache Toggl project IDs → names
+- `list_time_entries` for the full month
 
-All entries are entered manually in Toggl — **start/stop times are reliable**.
+Toggl `start` field: parsed as local DateTime by PowerShell's `ConvertFrom-Json`
+— use it directly, do NOT add UTC offset again.
 
 ---
 
 ## Step 4 — Compute attendance slots per day
 
-Group each day's entries into attendance slots by detecting gaps ≥ 15 min:
+Sort each day's entries by start time. A gap ≥ 15 min between consecutive
+entries = new slot boundary.
 
 ```
-Sort entries by start time.
-New slot starts when: gap between consecutive entries ≥ 15 min.
-Slot = { start: first_entry.start, end: last_entry.stop } within the group.
+Slot = { start: first_entry.start, end: last_entry.stop } per group.
 ```
 
-Example for May 27:
-```
-09:00–10:00, 10:00–11:00, 11:00–12:00, 12:00–13:00  → slot 1: 09:00–13:00
-── gap 2h ──
-15:00–16:00, 16:00–18:45                             → slot 2: 15:00–18:45
-```
-
-Result per day: list of `{start, end}` pairs.
-Find **max slots needed on any single day** → that's how many attendance rows to add.
+Find **max slots on any single day** — that's how many POSTs per day at maximum.
 
 ---
 
 ## Step 5 — Aggregate project hours
 
-Per project per day: sum durations, round to nearest 15 min.
-Discard if raw total < 7 min 30 s (rounds to 0). Minimum kept: 0:15.
+Per project per day: sum durations → round to nearest 15 min.
+Convert to float: 3h45m = 3.75, 8h30m = 8.5, 0h30m = 0.5.
+Discard if raw total < 7m30s.
 
 ---
 
-## Step 6 — Map Toggl projects → PPM rows
+## Step 6 — Map Toggl projects → PPM task IDs
 
-Match Toggl project names against the lineMap from Step 2.
+Use the task map from Step 2 (`window._tasks`) and this lookup:
 
-| Toggl name (contains) | PPM label keyword | PPM project | PPM task |
-|---|---|---|---|
-| `608_B12` | `608 Roche` | `608` | `B12` |
-| `422_RT` | `422` | `422` | `RT` |
-| `425.*Center` | `425.*Center` | `425` | `Center` |
-| `425.*preMove` | `425.*preMove` | `425` | `preMove` |
-| `497_USB` | `497` | `497` | `USB` |
-| `537_SLE` | `537` | `537` | `SLE` |
-| `641_Bau124` | `641` | `641` | `Bau124` |
-| `650_UC` | `650` | `650` | `UC` |
-| `655_UM6P` | `655` | `655` | `UM6P` |
-| `647_Monte` | `647` | `647` | `Monte` |
-| `469_NG20` | `469` | `469` | `NG20` |
-| `623_JBC` | `623` | `623` | `JBC` |
-| `680_Breakthrough` | `680` | `680` | `Breakthrough` |
-| `540_Hölzli` | `540` | `540` | `Hölzli` |
-| `630_Dreispitz` | `630` | `630` | `Dreispitz` |
-| `617_CST` | `617` | `617` | `CST` |
-| `482_Titlis` | `482` | `482` | `Titlis` |
-| `494_UZH` | `494 FORUM` | `494` | `UZH` |
-| `366_Lusail` | `366` | `366` | `Lusail` |
-| `180.4_Elsässer` | `180` | `180` | `Elsässer` |
-| `347.6_Toggenburg` | `374.6` | `374` | `Toggenburg` |
-| `509.1.*Currie` | `509.1` | `509` | `Currie` |
-| `632.*Mered` | `632 Mered` | `632` | `Mered` |
-| `DP_DTC.*Admin` | `/ Admin` | `DP_DTC` | `Admin` |
-| `DP_DTC.*SLaT` | `/ SLaT` | `DP_DTC` | `SLaT` |
-| `DP_DTC.*Strategy` | `/ Strategy` | `DP_DTC` | `Strategy` |
-| `DP_DTC.*Tools` | `/ Tools` | `DP_DTC` | `Tools` |
-| `DP_DTC.*Training` | `/ Training` | `DP_DTC` | `Training` |
-| `DP_DTC.*Outreach` | `/ Outreach` | `DP_DTC` | `Outreach` |
-| `DP_DTC.*Support` | `/ Support` | `DP_DTC` | `Support` |
-| `DP_DTC.*DT\b` | `/ DT` | `DP_DTC` | `DT` |
-| `905.*Event` | `905` | `905` | `Event` |
-| `924.*Academy` | `924` | `924` | `Academy` |
-| `934.*BIM` | `934.*BIM` | `934` | `BIM` |
-| `934.*General` | `934.*General` | `934` | `General` |
-| `934.*Tools` | `934.*Tools` | `934` | `Tools` |
+| Toggl name (contains) | PPM row label contains |
+|---|---|
+| `608_B12` | `608 Roche` |
+| `494_UZH` | `494 FORUM` |
+| `509.1.*Currie` | `509.1` |
+| `347.6_Toggenburg` | `374.6` |
+| `632.*Mered` | `632 Mered` |
+| `DP_DTC.*Admin` | `/ Admin` |
+| `DP_DTC.*SLaT` | `/ SLaT` |
+| `DP_DTC.*Strategy` | `/ Strategy` |
+| `DP_DTC.*Tools` | `/ Tools` |
+| `DP_DTC.*Training` | `/ Training` |
+| `DP_DTC.*Outreach` | `/ Outreach` |
+| `DP_DTC.*Support` | `/ Support` |
+| `422_RT` | `422` | ... etc (see full mapping table below)
 
-**For any unmapped Toggl project:** flag it and ask the user:
-> "Project `XYZ` has no PPM mapping. What should I search for in PPM — project name and task/phase?"
+**Full mapping table:**
 
-Toggl projects have no phase/task info — the user must supply this for any
-project not already in the mapping table above.
+| Toggl | PPM project | PPM task |
+|---|---|---|
+| `608_B12` | `608` | `B12` |
+| `422_RT` | `422` | `RT` |
+| `425.*Center` | `425` | `Center` |
+| `425.*preMove` | `425` | `preMove` |
+| `497_USB` | `497` | `USB` |
+| `537_SLE` | `537` | `SLE` |
+| `641_Bau124` | `641` | `Bau124` |
+| `650_UC` | `650` | `UC` |
+| `655_UM6P` | `655` | `UM6P` |
+| `647_Monte` | `647` | `Monte` |
+| `469_NG20` | `469` | `NG20` |
+| `623_JBC` | `623` | `JBC` |
+| `680_Breakthrough` | `680` | `Breakthrough` |
+| `540_Hölzli` | `540` | `Hölzli` |
+| `630_Dreispitz` | `630` | `Dreispitz` |
+| `617_CST` | `617` | `CST` |
+| `482_Titlis` | `482` | `Titlis` |
+| `494_UZH` | `494` | `UZH` |
+| `366_Lusail` | `366` | `Lusail` |
+| `180.4_Elsässer` | `180` | `Elsässer` |
+| `347.6_Toggenburg` | `374` | `Toggenburg` |
+| `509.1.*Currie` | `509` | `Currie` |
+| `632.*Mered` | `632` | `Mered` |
+| `DP_DTC.*Admin` | `DP_DTC` | `Admin` |
+| `DP_DTC.*SLaT` | `DP_DTC` | `SLaT` |
+| `DP_DTC.*Strategy` | `DP_DTC` | `Strategy` |
+| `DP_DTC.*Tools` | `DP_DTC` | `Tools` |
+| `DP_DTC.*Training` | `DP_DTC` | `Training` |
+| `DP_DTC.*Outreach` | `DP_DTC` | `Outreach` |
+| `DP_DTC.*Support` | `DP_DTC` | `Support` |
+| `DP_DTC.*DT\b` | `DP_DTC` | `DT` |
+| `905.*Event` | `905` | `Event` |
+| `924.*Academy` | `924` | `Academy` |
+| `934.*BIM` | `934` | `BIM` |
+| `934.*General` | `934` | `General` |
+| `934.*Tools` | `934` | `Tools` |
+
+For any unmapped project, ask the user for the PPM project + task search terms,
+add the row via UI, then re-fetch task IDs.
 
 ---
 
 ## Step 7 — Present summary table
 
-Show before touching PPM:
-
-```
-Month: May 2026 — Timesheet #51310
-
-ATTENDANCE (computed from entry gaps, ≥15 min gap = new slot):
-┌─────────┬──────────────────────────────────┐
-│ Day     │ Slots                            │
-├─────────┼──────────────────────────────────┤
-│ Tue 05  │ 06:30–13:00 │ 14:00–16:45       │
-│ Wed 06  │ 06:30–15:00                      │
-│ Thu 07  │ 06:30–15:00                      │
-│ ...     │ ...                              │
-└─────────┴──────────────────────────────────┘
-→ Max slots on any day: 2 → will add 2 attendance rows
-
-PROJECT HOURS:
-│ Date      │ Project            │ Hours │
-│ 05.05.26  │ DP_DTC / Admin     │ 3:45  │
-│ 05.05.26  │ 608 Roche B12      │ 0:30  │
-│ ...       │ ...                │ ...   │
-
-Missing PPM rows (need to add): DP_DTC / Training, DP_DTC / Support
-Unmapped Toggl projects: none
-
-Proceed? (y / adjust)
-```
-
-Wait for confirmation.
+Show before touching PPM and wait for confirmation.
 
 ---
 
 ## Step 8 — Add missing project rows via UI
 
-For each project row not yet in lineMap:
+For each project not yet in `window._tasks`:
 
-1. Click "Add project"
+1. Click "Add project" link
 2. Type PPM project search term → select match
-3. Type task search term → click to add tag
-4. Multiple tasks from same project: add all as tags before saving
-5. Click Save
+3. Type task search term → select, repeat for multiple tasks
+4. Click Save
 
-Re-run the row discovery JS to get updated lineMap.
-
----
-
-## Step 9 — Add attendance slot rows via UI
-
-Click "Add attendance time slot" exactly **max_slots** times
-(= max number of slots needed on any single day).
-
-Then re-run the discovery JS to get `attendanceLineIdxs`.
-
-Pair them: `[idx[0], idx[1]]` = slot 1, `[idx[2], idx[3]]` = slot 2, etc.
-Lower lineIdx of each pair = arrival row, higher = departure row.
+Re-fetch task IDs (Step 2) to get the new `task_id` values.
 
 ---
 
-## Step 10 — Inject everything via JS
-
-One call fills all attendance + all project hours:
+## Step 9 — Batch create project hours via XHR
 
 ```js
-function setCell(lineIdx, dayIdx, value) {
-  const cell = document.getElementById(`ts22-data-cell-${lineIdx}-${dayIdx}`);
-  if (!cell) return `MISSING line=${lineIdx} day=${dayIdx}`;
-  const existing = cell.textContent.trim();
-  if (existing && existing !== '00:00') return `SKIP line=${lineIdx} day=${dayIdx} (${existing})`;
-  cell.focus();
-  cell.textContent = value;
-  cell.dispatchEvent(new Event('input', {bubbles: true}));
-  cell.dispatchEvent(new Event('change', {bubbles: true}));
-  cell.blur();
-  return `SET line=${lineIdx} day=${dayIdx} = ${value}`;
-}
-
-// Attendance: dayIdx = day_of_month - 1
-// attendanceSlots: { dayIdx: [{start, end}, ...] }
-for (const [dayIdx, slots] of Object.entries(attendanceSlots)) {
-  slots.forEach((slot, i) => {
-    const arrivalLine  = attendanceLineIdxs[i * 2];
-    const departureLine = attendanceLineIdxs[i * 2 + 1];
-    setCell(arrivalLine,   dayIdx, slot.start);  // e.g. "6:30"
-    setCell(departureLine, dayIdx, slot.end);    // e.g. "13:00"
-  });
-}
-
-// Project hours: dayIdx = day_of_month - 1
-for (const [lineIdx, dayHours] of Object.entries(projectPayload)) {
-  for (const [dayIdx, value] of Object.entries(dayHours)) {
-    setCell(lineIdx, dayIdx, value);
+(async () => {
+  const tsId = "51310"; // string
+  const entries = [
+    // [date, taskId, floatAmount, isPublicHoliday?]
+    ["2026-05-05", 11557, 3.75],
+    ["2026-05-14", 11552, 8.5, true],  // public holiday
+    // ... all entries
+  ];
+  const results = [];
+  for (const [date, taskId, amt, isPubHol] of entries) {
+    const r = await postLine(date, taskId, amt, isPubHol||false, tsId);
+    results.push({date, taskId, amt, result: r.result, error: r.error?.data?.message});
+    await delay(300);
   }
-}
+  window._lineResults = results;
+})();
 ```
 
-Report: `✅ SET N cells, ⏭ SKIPPED M (already filled)`
+Check results: `r.result === 'ok'` = success.
+`"There are other timesheets for this date for the given task!"` = already exists (skip).
 
-### Holiday/weekend dialogs
+---
 
-Entries on public holidays or Sundays trigger a confirmation dialog.
-Check the checkbox, click OK. Continue — these are expected when the user
-has Toggl entries on those days.
+## Step 10 — Batch create attendance via XHR
+
+**Important sequence:** POST arrival → GET timesheet to find record ID → PUT departure.
+Departure cannot be POSTed standalone — it requires an existing arrival record.
+
+```js
+(async () => {
+  const tsId = "51310";
+  const plan = [
+    // [date, slot1_arr, slot1_dep, slot2_arr, slot2_dep, slot3_arr, slot3_dep]
+    ["2026-05-05", "8:30", "12:30", "13:30", "18:45", null, null],
+    ["2026-05-06", "8:30", "12:30", "13:30", "17:00", null, null],
+    // days with 1 slot:
+    ["2026-05-18", "10:00", "11:30", null, null, null, null],
+    // days with 3 slots:
+    ["2026-05-21", "8:30", "12:00", "13:00", "15:00", "18:00", "21:00"],
+  ];
+
+  // Step A: POST all slot 1 arrivals
+  for (const [date, s1arr] of plan) {
+    if (!s1arr) continue;
+    await postArrival(date, s1arr, tsId);
+    await delay(300);
+  }
+
+  // Step B: GET to find slot 1 IDs
+  const data1 = await getTs(tsId);
+  const slot1Ids = {};
+  data1.timesheet_days.forEach(day => {
+    const atts = day.attendance_lines || [];
+    if (atts.length >= 1) slot1Ids[day.date] = atts[0].id;
+  });
+
+  // Step C: PUT slot 1 departures
+  for (const [date, s1arr, s1dep] of plan) {
+    if (!s1dep || !slot1Ids[date]) continue;
+    await putDeparture(slot1Ids[date], date, s1dep, tsId);
+    await delay(300);
+  }
+
+  // Step D: POST slot 2 arrivals
+  for (const [date,,, s2arr] of plan) {
+    if (!s2arr) continue;
+    await postArrival(date, s2arr, tsId);
+    await delay(300);
+  }
+
+  // Step E: GET to find slot 2 IDs (atts[1] per day)
+  const data2 = await getTs(tsId);
+  const slot2Ids = {};
+  data2.timesheet_days.forEach(day => {
+    const atts = day.attendance_lines || [];
+    if (atts.length >= 2) slot2Ids[day.date] = atts[1].id;
+  });
+
+  // Step F: PUT slot 2 departures
+  for (const [date,,, s2arr, s2dep] of plan) {
+    if (!s2dep || !slot2Ids[date]) continue;
+    await putDeparture(slot2Ids[date], date, s2dep, tsId);
+    await delay(300);
+  }
+
+  // Repeat for slot 3 (atts[2] per day) if needed...
+
+  window._attDone = true;
+})();
+```
 
 ---
 
 ## Step 11 — Verify
 
 Reload the page and check:
-- Attendance rows show correct arrival/departure per day per slot
-- Project rows show correct hours in the right date columns
-- "Not allocated Hours (DIV)" is close to zero on filled days
+- All attendance rows show correct arrival/departure per day per slot
+- All project rows show correct hours in the right date columns
+- "Not allocated Hours (DIV)" is near zero on filled days
+- No validation error banner at top
 
 One summary line. Done.
 
 ---
 
 ## Clearing the timesheet (optional pre-step)
-
-If the user asks to clear the timesheet before filling, use the API:
 
 ```js
 (async () => {
@@ -362,8 +468,7 @@ If the user asks to clear the timesheet before filling, use the API:
 })();
 ```
 
-After running, check `window._clearResults` for any 500s and retry those IDs.
-Reload the page to confirm the sheet is empty.
+After clearing, retry any 500s individually. Reload to confirm empty sheet.
 
 ---
 
@@ -371,19 +476,19 @@ Reload the page to confirm the sheet is empty.
 
 | Situation | Action |
 |---|---|
-| Cell already filled (non-zero) | Skip and report |
-| Project row missing | Add via UI (Step 8), re-discover |
+| `"There are other timesheets for this date for the given task!"` | Entry already exists — skip, don't treat as error |
+| 500 on POST/PUT/DELETE | Concurrent update — retry after 500ms |
+| `'NoneType' object has no attribute '__getitem__'` | Wrong payload format — ensure body is `{"params":{"data":{...}}}` |
+| Departure POST returns mandatory field error | You cannot POST departure — use PUT with an existing arrival's ID |
+| Project row not in task map | Add via UI, re-fetch task IDs |
 | Toggl project unmapped | Ask user for PPM project + task search terms |
-| 500 on DELETE | Server concurrent update — retry that ID sequentially after 500ms |
-| Holiday/weekend dialog | Check box, click OK |
-| Attendance lineIdx pair unclear | Check `tr.ts22-time-row` count matches expected slots |
-| DOM clear doesn't persist on reload | Use DELETE API instead — DOM clearing never saves |
+| DOM injection doesn't persist on reload | Use the XHR API — DOM writes never create server records |
 
 ---
 
 ## Conversation style
 
-- Show summary table (Step 7) first — always wait for confirmation.
+- Show summary table first — always wait for confirmation.
 - One brief progress line while filling.
 - After completion: one summary line. Done.
-- Never narrate what you're about to do — just do it and report.
+- Never narrate — just do it and report.
