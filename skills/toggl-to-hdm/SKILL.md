@@ -230,14 +230,25 @@ Toggl `start` field: parsed as local DateTime by PowerShell's `ConvertFrom-Json`
 
 ## Step 4 — Compute attendance slots per day
 
-Sort each day's entries by start time. A gap ≥ 15 min between consecutive
-entries = new slot boundary.
+Sort each day's entries by start time. A gap ≥ 15 min between consecutive entries = new slot boundary. **Always apply this rigorously — never merge across a gap.**
 
 ```
-Slot = { start: first_entry.start, end: last_entry.stop } per group.
+for each day:
+  sort entries by start (UTC → convert to local first)
+  slots = []
+  current = {start: entries[0].start, end: entries[0].stop}
+  for each subsequent entry:
+    if entry.start - current.end >= 15min:
+      slots.push(current)
+      current = {start: entry.start, end: entry.stop}
+    else:
+      current.end = max(current.end, entry.stop)
+  slots.push(current)
 ```
 
-Find **max slots on any single day** — that's how many POSTs per day at maximum.
+Find **max slots on any single day** — that's how many POST/PUT rounds are needed.
+
+> **Example:** Apr 21 had entries ending at 18:30 and resuming at 20:15 (gap = 1h45m) → 3 slots: 08:30–13:00, 14:00–18:30, 20:15–21:45. Merging into 14:00–21:45 caused 1h15m unallocated.
 
 ---
 
