@@ -492,3 +492,43 @@ After clearing, retry any 500s individually. Reload to confirm empty sheet.
 - One brief progress line while filling.
 - After completion: one summary line. Done.
 - Never narrate — just do it and report.
+
+---
+
+## Learnings / Gotchas
+
+### CDP timeout on large async scripts
+`javascript_tool` times out after ~45s. A 51-entry loop at 300ms/entry takes ~25s+ (network adds up). Always use **fire-and-forget**: start the IIFE without awaiting it in the tool call, store progress in `window._*`, poll with separate calls.
+
+```js
+// ✅ fire and forget
+window._linesDone = false;
+(async function() { /* ... loop ... */ window._linesDone = true; })();
+'started'
+// then poll: window._linesDone, window._lineResults.length
+```
+
+### Top-level await not supported
+`javascript_tool` does NOT support top-level `await` — wrap everything in `(async function() { ... })()`.
+
+### list_projects output is huge
+`mcp__toggl-track__list_projects` result exceeds token limits and is saved to a file. Use PowerShell to extract only the needed IDs:
+```powershell
+$data = (Get-Content path.txt -Raw | ConvertFrom-Json).result | ConvertFrom-Json
+$data | Where-Object { $_.id -in @(195873305, 190179588) } | Select-Object id, name
+```
+
+### Toggl times are UTC
+All Toggl `start`/`stop` fields are UTC (`+00:00`). Swiss CEST = UTC+2. Add 2h for local attendance times. Entries with `duronly: true` have approximate start/stop but reliable dates.
+
+### Project rows may already exist from a prior session
+Before clicking "Add project", always GET the timesheet API and check `tasks[]`. If the user added rows manually previously, they'll appear there — skip the UI step entirely.
+
+### Script running twice / duplicate entries
+If the helpers script is re-run or the IIFE fires twice, `window._lineResults` accumulates. Duplicate POSTs return `"There are other timesheets for this date for the given task!"` — this is safe to ignore, not an error.
+
+### PPM row names don't always match the mapping table exactly
+The actual `name_for_timesheet` value (e.g. `"608 Roche Bau 12 / DD II FD1"`) may differ from the simplified mapping label. Always use `window._tasks` (keyed by the actual name returned from the API) rather than guessing strings.
+
+### Attendance UTC → local conversion
+Toggl UTC times need +2h (CEST) for April–October, +1h (CET) for November–March. Always confirm which timezone offset applies for the month being filled.
