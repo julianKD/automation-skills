@@ -21,7 +21,10 @@
       "mcp__toggl-track__get_project",
       "PowerShell(git push)",
       "mcp__Claude_in_Chrome__read_network_requests",
-      "Bash(gh pr *)"
+      "Bash(gh pr *)",
+      "Bash(cp \"C:\\\\temp\\\\gitrepos\\\\automation-skills\\\\skills\\\\toggl-to-hdm\\\\SKILL.md\" \"C:\\\\Users\\\\j.hoell\\\\.claude\\\\skills\\\\toggl-to-hdm\\\\SKILL.md\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
