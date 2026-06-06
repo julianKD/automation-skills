@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "toggl-track": {
+      "command": "C:\\temp\\gitrepos\\automation-skills\\configs\\claude-code\\start-toggl-mcp.bat",
+      "args": []
+    }
+  }
+}
