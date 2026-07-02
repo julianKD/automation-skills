@@ -13,10 +13,24 @@ Pull Toggl entries for a period, aggregate by project and day, compute
 attendance slots from entry gaps, then fill everything via direct API calls.
 Be brief and action-oriented.
 
+## Golden rule — API only, never the mouse
+
+**Never drive PPM with mouse/keyboard automation** (`computer`, `find`,
+`form_input`, clicks, typing) for any part of this process. Every read and
+write goes through the XHR/`fetch` API endpoints below, run via
+`javascript_tool`. This is faster, deterministic, and avoids silent UI
+failures.
+
+The **only** exception is adding a missing project row, which has no API:
+do **not** click it yourself — ask the user to add the row via the UI and
+reload, then re-fetch task IDs. Do not attempt to automate the "Add project"
+dialog with the mouse.
+
 ## MCP dependencies
 
 - `toggl-track` MCP — `list_time_entries`, `list_projects`
-- `Claude in Chrome` MCP — XHR API calls + UI for adding missing project rows
+- `Claude in Chrome` MCP — `navigate` + `javascript_tool` only (XHR/fetch API
+  calls). No mouse/keyboard tools for the fill process.
 
 ---
 
@@ -332,16 +346,19 @@ Show before touching PPM and wait for confirmation.
 
 ---
 
-## Step 8 — Add missing project rows via UI
+## Step 8 — Add missing project rows (user does this, not you)
 
-For each project not yet in `window._tasks`:
+There is no API to add a project row, and per the Golden rule you must **not**
+automate the "Add project" dialog with the mouse. For each project not yet in
+`window._tasks`:
 
-1. Click "Add project" link
-2. Type PPM project search term → select match
-3. Type task search term → select, repeat for multiple tasks
-4. Click Save
+1. List the missing PPM project + task search terms for the user.
+2. Ask the user to add those rows via the UI ("Add project" → search project →
+   search task → Save) and tell you when done.
+3. Reload the page and re-fetch task IDs (Step 2) to pick up the new
+   `task_id` values.
 
-Re-fetch task IDs (Step 2) to get the new `task_id` values.
+Then continue with the API-driven fill.
 
 ---
 
@@ -491,7 +508,7 @@ After clearing, retry any 500s individually. Reload to confirm empty sheet.
 | 500 on POST/PUT/DELETE | Concurrent update — retry after 500ms |
 | `'NoneType' object has no attribute '__getitem__'` | Wrong payload format — ensure body is `{"params":{"data":{...}}}` |
 | Departure POST returns mandatory field error | You cannot POST departure — use PUT with an existing arrival's ID |
-| Project row not in task map | Add via UI, re-fetch task IDs |
+| Project row not in task map | Ask the user to add it via UI, then reload + re-fetch task IDs — never automate the clicks |
 | Toggl project unmapped | Ask user for PPM project + task search terms |
 | DOM injection doesn't persist on reload | Use the XHR API — DOM writes never create server records |
 
@@ -507,6 +524,14 @@ After clearing, retry any 500s individually. Reload to confirm empty sheet.
 ---
 
 ## Learnings / Gotchas
+
+### API only — no mouse
+Every fill operation (project hours, attendance, reads, clears) goes through
+the XHR/`fetch` endpoints via `javascript_tool`. Mouse/keyboard automation
+(`computer`, `find`, `form_input`) is unreliable here — the "Add project"
+autocomplete in particular silently fails to register typed input. Do not use
+it. The only manual step is adding a missing project row, which the **user**
+does in the UI; you then reload and re-fetch task IDs.
 
 ### CDP timeout on large async scripts
 `javascript_tool` times out after ~45s. A 51-entry loop at 300ms/entry takes ~25s+ (network adds up). Always use **fire-and-forget**: start the IIFE without awaiting it in the tool call, store progress in `window._*`, poll with separate calls.
