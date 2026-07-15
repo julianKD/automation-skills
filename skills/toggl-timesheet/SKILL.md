@@ -175,7 +175,7 @@ If a proposed entry overlaps, adjust or flag it transparently.
 
 - A lunch break is always present on workdays.
 - NEVER auto-fill lunch. Always ask the user for time and duration.
-- Default duration is **30 minutes** — never assume 1 hour.
+- Typical duration is **1 hour**; sometimes 30 minutes — always confirm, never assume.
 - Propose a default based on recent patterns but mark it `CONFIRM`.
 
 ### Gap filling
@@ -183,10 +183,11 @@ If a proposed entry overlaps, adjust or flag it transparently.
 When the user provides arrival or departure time:
 1. Query the day's entries.
 2. Identify gaps between entries (excluding lunch).
-3. Propose gap-fill entries based on the dominant project of that day,
-   or `DP_DTC - Admin` if no dominant project.
+3. Propose gap-fill entries by **rotating** across `DP_DTC - Admin`,
+   `DP_DTC - Strategy/Initiatives`, and `DP_DTC - Tools/Development`
+   — do not repeat the same project for every gap-fill.
 4. Mark gap-fills as `gap-fill` status in the table.
-5. After computing all entries, apply the merge rule above.
+5. After computing all entries, keep each gap-fill as its own entry.
 
 ### Arrival and departure
 

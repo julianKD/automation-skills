@@ -569,5 +569,5 @@ The actual `name_for_timesheet` value (e.g. `"608 Roche Bau 12 / DD II FD1"`) ma
 ### Attendance UTC → local conversion
 Toggl UTC times need +2h (CEST) for April–October, +1h (CET) for November–March. Always confirm which timezone offset applies for the month being filled.
 
-### Lunch gap is 30 minutes
-When computing attendance slots, the standard lunch break is **30 minutes**. A gap of 30 min between consecutive entries is a lunch break and always creates a new slot boundary. Never assume a 1-hour lunch unless the gap in Toggl entries is actually 60 min.
+### Lunch gap duration
+When computing attendance slots, the lunch gap is whatever the Toggl entries show (typically 30–60 min). A gap ≥ 30 min between consecutive entries is treated as a slot boundary. Do not assume a fixed lunch duration — read it from the actual gap between entries.
