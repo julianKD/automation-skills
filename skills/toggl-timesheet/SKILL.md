@@ -71,9 +71,9 @@ them from recent data every session.
 |---|---|
 | `DP_DTC - Admin` | eMails, hours, IT, briefings, interviews, timesheets, general admin |
 | `DP_DTC - SLaT` | BIM Standards, Wiki, templates, titleblocks, standards |
-| `DP_DTC - Strategy/Initiatives` | Speckle, CALC, Robotics, RealView, Directus, Notion, BIM strategy |
+| `DP_DTC - Strategy/Initiatives` | Speckle, CALC, Robotics, RealView, Directus, Notion, BIM strategy, **Revizto meetings** |
 | `DP_DTC - Tools/Development` | Toolbox, pyRevit, Rhino toolbar, AREA, BIMlight, scripts, git |
-| `DP_DTC - Training/Knowledge` | ACC, dRofus, Revizto, Robot, BILT, workshops |
+| `DP_DTC - Training/Knowledge` | ACC, dRofus, Robot, BILT, workshops (not Revizto) |
 | `DP_DTC - Outreach` | SpeckleCon, BILT, Field Day, presentations, Swissbau |
 | `DP_DTC - Support` | IT support, project support |
 | `DP_DTC - DT` | DPCon, presentations |
@@ -140,30 +140,29 @@ For detailed per-project vocabulary, see [reference.md](reference.md).
 All entries snap to 15-minute boundaries. Round start/end times to the
 nearest quarter hour. Minimum entry: 0:15.
 
-### Merge consecutive same-project entries
+### One entry per meeting — never merge distinct meetings
 
-Adjacent entries on the **same project** MUST be merged into a single
-Toggl entry. This includes gap-fills absorbed into neighbouring meetings.
+Each distinct calendar meeting gets its own Toggl entry, even if
+consecutive and on the same project. **Never combine two named meetings
+into one entry.**
 
-- Join descriptions with ` / ` separator:
-  `Projekt-Znüni / BIM Exchange` for two merged 608_B12 blocks.
-- A gap-fill between two entries of the same project becomes one entry
-  spanning the full range, with the combined description.
-- A gap-fill next to a meeting on the same project is absorbed into that
-  meeting's entry (extend its duration, keep/append description).
-- This dramatically reduces the total number of API calls and produces
-  cleaner timesheets.
+- "US Exchange" and "Goodbye Joe" → two entries, even if both Admin.
+- "DP-Update Wim" and "Revizto Recap" → two entries, even back-to-back.
+- An unnamed gap-fill **may** be absorbed into an adjacent named meeting
+  on the same project (extend its duration) when the gap has no distinct
+  identity. This is the only merge that is ever permitted.
 
-**Example -- before merge:**
+**Example — gap-fill absorbed (ok):**
 ```
 | 09:00 - 10:00 | 608_B12 | Projekt-Znüni | NEW      |
-| 10:00 - 10:30 | 608_B12 | -             | gap-fill |
-| 10:30 - 11:30 | 608_B12 | BIM Exchange  | NEW      |
+| 10:00 - 10:30 | 608_B12 | -             | gap-fill |  ← absorbed
+| 10:30 - 11:30 | 608_B12 | BIM Exchange  | NEW      |  ← stays separate
 ```
+Result: Projekt-Znüni 09:00–10:30 (gap absorbed), BIM Exchange 10:30–11:30.
 
-**After merge (one entry):**
+**Never do this:**
 ```
-| 09:00 - 11:30 | 608_B12 | Projekt-Znüni / BIM Exchange | NEW |
+| 09:00 - 11:30 | 608_B12 | Projekt-Znüni / BIM Exchange | NEW |  ← WRONG
 ```
 
 ### Overlap protection
@@ -176,6 +175,7 @@ If a proposed entry overlaps, adjust or flag it transparently.
 
 - A lunch break is always present on workdays.
 - NEVER auto-fill lunch. Always ask the user for time and duration.
+- Default duration is **30 minutes** — never assume 1 hour.
 - Propose a default based on recent patterns but mark it `CONFIRM`.
 
 ### Gap filling
