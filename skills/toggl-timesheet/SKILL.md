@@ -50,12 +50,14 @@ them from recent data every session.
 | `425 Roche pRED - preMove` | Roche preMove |
 | `497_USB` | USB |
 | `537_SLE` | Schaulager |
+| `509.1_Currie Park Plot 4` | Currie Park -- check if exists, create new if not |
 | `641_Bau124` | Roche Bau 124 |
 | `650_UC HQ Milan` | UniCredit Milan |
 | `655_UM6P` | UM6P |
 | `647_Monte-Carlo Terrasses` | Monte Carlo |
 | `469_NG20` | NG20 |
 | `623_JBC` | JBC |
+| `578_Sixth and Blanco` | Sixth and Blanco |
 | `680_Breakthrough` | Breakthrough |
 | `540_Hölzlistrasse` | Hölzlistrasse |
 | `630_Dreispitz` | Dreispitz |
@@ -64,6 +66,7 @@ them from recent data every session.
 | `494_UZH` | UZH |
 | `366_Lusail Museum` | Lusail Museum |
 | `180.4_Elsässertor 2` | Elsässertor |
+| `708_Congresses Tirana` | Congresses Tirana -- create new project if not found |
 
 ### Internal projects (DP_DTC prefix)
 
@@ -71,7 +74,7 @@ them from recent data every session.
 |---|---|
 | `DP_DTC - Admin` | eMails, hours, IT, briefings, interviews, timesheets, general admin |
 | `DP_DTC - SLaT` | BIM Standards, Wiki, templates, titleblocks, standards |
-| `DP_DTC - Strategy/Initiatives` | Speckle, CALC, Robotics, RealView, Directus, Notion, BIM strategy, **Revizto meetings** |
+| `DP_DTC - Strategy/Initiatives` | Speckle, CALC, Robotics, RealView, Directus, Notion, BIM strategy, **Revizto meetings**, Motif, slantis |
 | `DP_DTC - Tools/Development` | Toolbox, pyRevit, Rhino toolbar, AREA, BIMlight, scripts, git |
 | `DP_DTC - Training/Knowledge` | ACC, dRofus, Robot, BILT, workshops (not Revizto) |
 | `DP_DTC - Outreach` | SpeckleCon, BILT, Field Day, presentations, Swissbau |
@@ -175,7 +178,7 @@ If a proposed entry overlaps, adjust or flag it transparently.
 
 - A lunch break is always present on workdays.
 - NEVER auto-fill lunch. Always ask the user for time and duration.
-- Typical duration is **1 hour**; sometimes 30 minutes — always confirm, never assume.
+- Default duration is **30 minutes**. Never default to 1 hour. Propose 30 min unless the user says otherwise.
 - Propose a default based on recent patterns but mark it `CONFIRM`.
 
 ### Gap filling
@@ -186,8 +189,34 @@ When the user provides arrival or departure time:
 3. Propose gap-fill entries by **rotating** across `DP_DTC - Admin`,
    `DP_DTC - Strategy/Initiatives`, and `DP_DTC - Tools/Development`
    — do not repeat the same project for every gap-fill.
+   **Keep Admin low: roughly one Admin gap-fill per day (the morning
+   eMails block), everything else Strategy/Initiatives or
+   Tools/Development.** If the day already has several named Admin
+   meetings, use no Admin gap-fill at all. Admin should not dominate
+   a day's total.
 4. Mark gap-fills as `gap-fill` status in the table.
 5. After computing all entries, keep each gap-fill as its own entry.
+
+### OOO blocks — "JHO ooo"
+
+A block titled **"JHO ooo"** (any casing) means the user was **out of office for exactly that time range** — not the whole day.
+
+- **Exclude that time range entirely**: no meeting entries, no gap-fills inside it.
+- Other parts of the same day are tracked normally.
+- A `JHO ooo` block running to end-of-day means the user **left at its start time** — that is the departure time for that day, overriding the normal 18:30/18:45.
+- If a named meeting overlaps a `JHO ooo` range, **ask** — do not silently include or drop it.
+
+### Wednesday early departure
+
+Standard end-of-day on **Wednesdays is 17:30** (fixed obligation — kita pickup). Never propose gap-fills or entries past 17:30 on Wednesdays, regardless of what the calendar shows after that time.
+
+### Meeting room bookings and duplicate blocks
+
+Skip any calendar entry that exists to reserve a space or is a duplicate shell of a real meeting:
+
+- Title contains **"Meeting Room"**, "Room for [X]", "Room Booking" → **skip**.
+- A **generic title** like `DP_DTC - Meeting` sitting in the same slot as a specifically-named meeting → the generic one is the room/organizer shell. **Track the named meeting, skip the generic one.**
+- The **same title appearing twice** in adjacent sub-columns of one day (two organizers, one meeting) → **count once**.
 
 ### Arrival and departure
 
@@ -220,28 +249,49 @@ User pastes an Outlook calendar screenshot.
 #### Outlook time-reading rules
 
 - The calendar has hour marks on the left (9, 10, 11 …). Use them as
-  a ruler. Each hour occupies a consistent vertical height.
-- **Default meeting duration is 1 hour**, not 30 minutes. When a block
-  spans from one hour mark to the next, that is 1:00. Only read 0:30
-  when the block clearly ends at the half-hour line.
+  a ruler. **Compute the px-per-hour spacing first**, then convert every
+  block's top and bottom edge to a time with that constant.
 - Measure each block's top and bottom edge against the hour grid.
   Do not guess or round down -- match the pixel position.
-- Common error to avoid: reading a 1-hour block as 30 min because
-  the text is short. Text length does not indicate duration.
+- Text length does not indicate duration. A one-line title can be a
+  1-hour block; a three-line title can be 30 min.
+
+#### Side-by-side blocks are usually SEQUENTIAL, not parallel
+
+Outlook splits a day column into sub-columns, so blocks that look
+side-by-side are often **back-to-back in time**. **Never infer overlap
+from horizontal position.**
+
+- Compare **vertical top edges**. Only if two blocks share
+  substantially the same top *and* bottom edge are they truly concurrent.
+- If block A's bottom edge equals block B's top edge, they are
+  sequential — track both, one after the other.
+- Only flag a genuine conflict when the vertical ranges actually
+  overlap. Then ask which one the user attended.
 
 #### Outlook meeting status
 
-Outlook shows meeting status via the left-edge border of each item:
+Outlook shows meeting status via background color AND left-edge border:
 
 | Visual indicator | Status | Action |
 |---|---|---|
-| Solid coloured left border | **Busy / Accepted** | Include normally |
-| Striped / hatched left border | **Tentative** | Ask user: "Attended [title]?" |
-| No border / transparent | **Free** | **Skip entirely** -- do not track |
+| Solid blue background, solid left border | **Busy / Accepted** | Include normally |
+| Light blue background + diagonal stripe / hatched pattern | **Tentative** | **Ask user: "Attended [title]?"** — never assume attended |
+| **White / no background color** (transparent or very faint) | **Free** | **SKIP ENTIRELY — never track, no exceptions** |
 | Cancelled / strikethrough text | **Cancelled** | Skip |
 
-- Always check the left-edge border before including a meeting.
+- **Free = white = invisible to Toggl.** If a block has no colored background, it is Free and must be ignored completely, regardless of what the text says.
+- **Tentative = light blue with a diagonal stripe pattern.** Always ask the user whether they attended before including it.
+- Always check both the background color and left-edge border before including a meeting.
 - When unsure whether an item is tentative or free, ask the user.
+
+#### All-day banner row — ignore entirely
+
+The narrow rows above the time grid (holding items like `Sommerferien`,
+`XYZ_OoO`, `nil ooo Nils Lindhorst`, and **`+2` / `+3` collapse badges**)
+are **all-day banners — almost always colleagues' out-of-office notices**.
+They are not the user's meetings. **Never track them and never ask about
+the `+N` badges** — just state what they are and move on.
 
 ### Mode B: Verbal input
 
