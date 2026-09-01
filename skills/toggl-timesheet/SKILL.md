@@ -204,10 +204,16 @@ When the user provides arrival or departure time:
 4. Mark gap-fills as `gap-fill` status in the table.
 5. After computing all entries, keep each gap-fill as its own entry.
 
-### Monday is always OOO
+### Monday is normally OOO
 
-**The work week is Tuesday-Friday. Monday is ALWAYS out of office** - never
-create entries for a Monday, never gap-fill it, never ask about it.
+**The work week is Tuesday-Friday. Monday is out of office by default** -
+never gap-fill a Monday and never propose one on your own.
+
+The one exception: the user may **explicitly** ask for occasional Monday
+work (typically a short afternoon or evening session, e.g. to top up the
+monthly attendance target). Only then create Monday entries, only for the
+hours they name, and never extend beyond them. Such sessions sit outside
+the normal 08:45-18:45 span and need no lunch break.
 
 ### OOO blocks — "JHO ooo"
 
