@@ -55,7 +55,15 @@
       "Bash(cp \"C:/temp/gitrepos/automation-skills/skills/toggl-to-hdm/SKILL.md\" \"C:/Users/j.hoell/.claude/skills/toggl-to-hdm/SKILL.md\")",
       "Bash(diff \"C:/Users/j.hoell/.claude/skills/toggl-timesheet/SKILL.md\" \"C:/temp/gitrepos/automation-skills/skills/toggl-timesheet/SKILL.md\" && diff \"C:/Users/j.hoell/.claude/skills/toggl-to-hdm/SKILL.md\" \"C:/temp/gitrepos/automation-skills/skills/toggl-to-hdm/SKILL.md\" && echo \"identical\")",
       "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); projects=json.loads\\(data['result']\\); [print\\(p['id'], p['name']\\) for p in projects if any\\(k in p['name'] for k in ['DP_DTC','608_B12','B012','422','425','497','537','641','650','655','647','469','623','680','540','630','617','482','494','366','180','905','924','934']\\)]\")",
-      "mcp__claude-in-chrome__list_connected_browsers"
+      "mcp__claude-in-chrome__list_connected_browsers",
+      "Bash(SSL_CERT_FILE='' .venv-toggl/Scripts/python.exe -c ' *)",
+      "WebSearch",
+      "WebFetch(domain:cursor.com)",
+      "Bash(SSL_CERT_FILE= .venv-toggl/Scripts/python.exe -u \"C:/Users/J9D92~1.HOE/AppData/Local/Temp/claude/C--temp-gitrepos-automation-skills/2d39ccb0-4394-46b9-95db-a29ebac56ac9/scratchpad/toggl_w34.py\" --commit)",
+      "Bash(SSL_CERT_FILE= .venv-toggl/Scripts/python.exe -u \"C:/Users/J9D92~1.HOE/AppData/Local/Temp/claude/C--temp-gitrepos-automation-skills/2d39ccb0-4394-46b9-95db-a29ebac56ac9/scratchpad/toggl_lunchfix.py\")",
+      "Bash(SSL_CERT_FILE= .venv-toggl/Scripts/python.exe -u \"C:/Users/J9D92~1.HOE/AppData/Local/Temp/claude/C--temp-gitrepos-automation-skills/2d39ccb0-4394-46b9-95db-a29ebac56ac9/scratchpad/toggl_lunchfix.py\" --commit)",
+      "Bash(SSL_CERT_FILE= .venv-toggl/Scripts/python.exe)",
+      "Bash(SSL_CERT_FILE= .venv-toggl/Scripts/python.exe -u \"C:/Users/J9D92~1.HOE/AppData/Local/Temp/claude/C--temp-gitrepos-automation-skills/2d39ccb0-4394-46b9-95db-a29ebac56ac9/scratchpad/toggl_w35.py\" --commit)"
     ]
   }
 }

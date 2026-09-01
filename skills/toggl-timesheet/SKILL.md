@@ -76,7 +76,8 @@ them from recent data every session.
 | `DP_DTC - SLaT` | BIM Standards, Wiki, templates, titleblocks, standards |
 | `DP_DTC - Strategy/Initiatives` | Speckle, CALC, Robotics, RealView, Directus, Notion, BIM strategy, **Revizto meetings**, Motif, slantis |
 | `DP_DTC - Tools/Development` | Toolbox, pyRevit, Rhino toolbar, AREA, BIMlight, scripts, git |
-| `DP_DTC - Training/Knowledge` | ACC, dRofus, Robot, BILT, workshops (not Revizto) |
+| `DP_DTC - Training/Knowledge` | **Training YOU RECEIVE only** -- self-development: ACC, dRofus, Robot, BILT, courses/workshops you attend as a participant (not Revizto) |
+| | **Training you GIVE to others** (intros, onboarding, teaching, demos) belongs in `DP_DTC - Strategy/Initiatives`, NOT here |
 | `DP_DTC - Outreach` | SpeckleCon, BILT, Field Day, presentations, Swissbau |
 | `DP_DTC - Support` | IT support, project support |
 | `DP_DTC - DT` | DPCon, presentations |
@@ -177,8 +178,14 @@ If a proposed entry overlaps, adjust or flag it transparently.
 ### Lunch
 
 - A lunch break is always present on workdays.
-- NEVER auto-fill lunch. Always ask the user for time and duration.
+- **Lunch ALWAYS falls inside the 12:30-14:00 window.** It may never start
+  before 12:30 nor end after 14:00. Never place lunch at 12:00.
 - Default duration is **30 minutes**. Never default to 1 hour. Propose 30 min unless the user says otherwise.
+- If a meeting occupies the 12:30-14:00 window, fit lunch into whatever part
+  of the window is free (e.g. 12:30-13:00 when a meeting starts at 13:00).
+  A 1 h lunch is only possible when a full hour inside the window is free -
+  never displace a meeting to make room.
+- NEVER auto-fill lunch. Always ask the user for time and duration.
 - Propose a default based on recent patterns but mark it `CONFIRM`.
 
 ### Gap filling
@@ -197,13 +204,19 @@ When the user provides arrival or departure time:
 4. Mark gap-fills as `gap-fill` status in the table.
 5. After computing all entries, keep each gap-fill as its own entry.
 
+### Monday is always OOO
+
+**The work week is Tuesday-Friday. Monday is ALWAYS out of office** - never
+create entries for a Monday, never gap-fill it, never ask about it.
+
 ### OOO blocks — "JHO ooo"
 
 A block titled **"JHO ooo"** (any casing) means the user was **out of office for exactly that time range** — not the whole day.
 
 - **Exclude that time range entirely**: no meeting entries, no gap-fills inside it.
 - Other parts of the same day are tracked normally.
-- A `JHO ooo` block running to end-of-day means the user **left at its start time** — that is the departure time for that day, overriding the normal 18:30/18:45.
+- **A `JHO ooo` block is usually just a BREAK, not a departure.** The working day continues after it. Never assume it ends the day.
+- Only treat it as a departure if it clearly runs to the end of the working day AND nothing is scheduled after it — and even then, **ask** rather than assume.
 - If a named meeting overlaps a `JHO ooo` range, **ask** — do not silently include or drop it.
 
 ### Wednesday early departure
@@ -220,8 +233,11 @@ Skip any calendar entry that exists to reserve a space or is a duplicate shell o
 
 ### Arrival and departure
 
-Do not hardcode arrival/departure times. Derive from recent 2-week
-pattern. If no pattern available, ask the user.
+- **Standard arrival: 08:45**, sometimes 09:00.
+- **Standard departure: 18:30-18:45.**
+- **Wednesday departure: 17:30** (fixed - kita pickup, see above).
+- These are the defaults. Only deviate when the calendar or the user says so,
+  and never invent a later departure than 18:45.
 
 ### New project numbers
 
@@ -282,6 +298,7 @@ Outlook shows meeting status via background color AND left-edge border:
 
 - **Free = white = invisible to Toggl.** If a block has no colored background, it is Free and must be ignored completely, regardless of what the text says.
 - **Tentative = light blue with a diagonal stripe pattern.** Always ask the user whether they attended before including it.
+- **`B012 Projekt-Znüni` is NEVER attended** - always skip it, never ask.
 - Always check both the background color and left-edge border before including a meeting.
 - When unsure whether an item is tentative or free, ask the user.
 
