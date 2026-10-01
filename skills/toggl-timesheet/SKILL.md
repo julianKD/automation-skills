@@ -200,9 +200,22 @@ When the user provides arrival or departure time:
    eMails block), everything else Strategy/Initiatives or
    Tools/Development.** If the day already has several named Admin
    meetings, use no Admin gap-fill at all. Admin should not dominate
-   a day's total.
+   a day's total. **Exception: Thursday afternoons** — see below.
 4. Mark gap-fills as `gap-fill` status in the table.
 5. After computing all entries, keep each gap-fill as its own entry.
+
+### Thursday afternoon gap-fill = 608_B12 / Support
+
+On **Thursdays**, every gap-fill **after lunch** goes to `608_B12` with
+description `Support` — never Admin, Strategy/Initiatives or
+Tools/Development. Thursday mornings follow the normal rotation.
+
+- Named meetings keep their own project.
+- Entries the user explicitly assigns (e.g. "train work = Admin") are not
+  gap-fills — keep them as told.
+- When reviewing existing entries, convert any unnamed Admin /
+  Strategy/Initiatives / Tools/Development block on a Thursday afternoon
+  to `608_B12` / `Support`.
 
 ### Monday is normally OOO
 
