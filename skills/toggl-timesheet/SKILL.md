@@ -253,8 +253,9 @@ Skip any calendar entry that exists to reserve a space or is a duplicate shell o
 ### Arrival and departure
 
 - **Arrival varies — never use the same time every day.** Mostly 08:45,
-  often 09:00, rarely 09:15. When proposing several days at once, mix them
-  (e.g. 08:45 / 09:00 / 08:45 / 09:15 across a week), not a flat 08:45.
+  often 09:00. **09:15 only very rarely** (at most once in several weeks,
+  never by default). When proposing several days at once, mix 08:45 and
+  09:00 (e.g. 08:45 / 09:00 / 09:00 / 08:45), not a flat 08:45.
 - **Standard departure: 18:30-18:45.**
 - **Wednesday departure: 17:30** (fixed - kita pickup, see above).
 - These are the defaults. Only deviate when the calendar or the user says so,
